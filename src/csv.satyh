@@ -9,6 +9,7 @@ type csv-parser-error =
 module CSV : sig
 
   val parser : string ?-> string -> ((string list) list) csv-parser-error result
+  val printer : string ?-> (string list) list -> string
 
 end = struct
 
@@ -163,5 +164,39 @@ end = struct
     parser-sub separater separater-len str [] 0
 
 
+
+  let join s lst =
+    let f i s1 s2 =
+      if i == 0 then
+        s2
+      else
+        s1^s^s2
+    in
+    List.fold-lefti f empty-string lst
+
+
+  let escape s =
+    let lst = string-explode s in
+    let exist-lf = List.any (fun i -> i == 0x00A) lst in
+    let exist-double-quotation = List.any (fun i -> i == 0x0022) lst in
+    match (exist-double-quotation, exist-lf) with
+    | (true, _) -> `""` ^ s ^ `""`
+    | (false, true) -> `"` ^ s ^ `"`
+    | _ -> s
+
+
+  let printer ?:separater-opt data =
+    let separater =
+      match separater-opt with
+      | None -> `,`
+      | Some(s) -> s
+    in
+    data
+    |> List.map (fun lst -> (
+      lst
+      |> List.map escape
+      |> join separater
+    ))
+    |> join (cr^lf)
 
 end
