@@ -29,10 +29,10 @@
   ;; Build commands
   (build
     ;; Run SATySFi
-    ((satysfi "manual.saty" "-o" "manual.pdf")))
+    ((satysfi "csv-manual-ja.saty" "-o" "csv-manual-ja.pdf")))
   ;; Files
   (sources
-    ((doc "manual.pdf" "doc/manual.pdf")))
+    ((doc "csv-manual-ja.pdf" "doc/csv-manual-ja.pdf")))
   ;; OPAM package file
   (opam "satysfi-csv-doc.opam")
   ;; Dependency

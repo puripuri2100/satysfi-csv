@@ -1,0 +1,187 @@
+@require: stdjabook
+@require: itemize
+@require: debug-show-value/debug-show-value
+@require: base/result
+@require: code
+
+@require: csv/csv
+%@import: ../src/csv
+
+
+
+let lf = string-unexplode [0x00A]
+
+let show-csv-error e =
+  match e with
+  | CSVParserErrorUnExpectedChar(pos, s) -> `Error: <pos: `# ^ (arabic pos) ^ ``>, <char: ` `` ^ s ^ `` `>``
+  | CSVParserErrorEOI -> `Error: <eoi>`
+
+
+
+let show-csv-data l = DebugShowValue.show-list (fun lst -> (
+    DebugShowValue.show-list (fun s -> `` ` `` ^ s ^ `` ` ``) lst
+  )) l
+
+let-inline \show-value sep-opt v =
+  let s =
+    match sep-opt with
+    | None -> (
+      match CSV.parser v with
+      | Err(e) -> show-csv-error e
+      | Ok(l) -> `Ok(` ^ show-csv-data l ^ `)`
+    )
+    | Some(sep) -> (
+      match CSV.parser ?:(sep) v with
+      | Err(e) -> show-csv-error e
+      | Ok(l) -> `Ok(` ^ show-csv-data l ^ `)`
+    )
+  in
+  {\d-code(lf^s);}
+
+let demo-csv-data = `1,2,3
+foo,bar , baz`
+
+let demo-csv-data-2 = `1,"foo",bar`
+
+let demo-csv-data-2-err = `1,a"foo",bar`
+
+let demo-csv-data-3 = `1,"foo
+bar","baz1,baz2"
+2, foo , 3`
+
+let demo-csv-data-4 = `1,""foo"bar"",baz`
+
+
+let demo-csv-data-5 = `1:2,320:s23
+2:423,232:sdf`
+
+
+
+let csv-data-1 = [
+  [`1`; `foo"bar`; `baz`];
+  [`2`; `foo
+bar`];
+  [`3`; `fo"o
+bar`; `baz1,baz2`];
+]
+
+in
+
+
+document (|
+  title = {csv Manual};
+  author = {Naoki Kaneko};
+  show-title = true;
+  show-toc = true;
+|) '<
+  +section {概要} <
+    +p{このライブラリは、CSV形式のデータのパーサー関数、及びプリンター関数を提供します。}
+    +p{提供するパッケージファイルは\code(`csv.satyg`);ファイルのみですので、読み込みは
+    \d-code(`@require: csv/csv`);
+    とするだけで完了します。\code(`csv.satyg`);ファイルが提供するモジュールの名前は\code(`CSV`);です。}
+  >
+  +section {CSVデータのパース} <
+    +subsection {基本的な使い方など} <
+      +p{CSV形式のデータをパースするための関数は\code(`parser`);です。型は
+      \d-code(`
+  parser : string ?-> string ->
+            ((string list) list) csv-parser-error result`);
+      です。}
+      +p{\code(`'ok 'err result`);型はsatysfi-baseライブラリが提供する型の一つです。
+      成功を表す\code(`Ok('ok)`);というデータと、失敗を表す\code(`Err('err)`);というデータを表現する代数的データ型です。
+      この型を操作するための関数はsatysfi-baseライブラリ内のresultパッケージで提供されています。}
+      +p{CSVデータの表現は\code(`(string list) list`);という型によって行っています。}
+      +p{パースに失敗したときのエラーを表すための型が\code(`csv-parser-error`);です。トップレベルで定義されています。
+      内部の定義は
+      \d-code(`
+type csv-parser-error =
+  | CSVParserErrorUnExpectedChar of int * string
+  | CSVParserErrorEOI
+  `);
+      です。予期しない文字が出現した場合は\code(`CSVParserErrorUnExpectedChar`);が返り、「その予期しない文字が出現する位置」と「予期しない文字そのもの」を取り出すことができます。
+      予期しない文字の終了があった場合には\code(`CSVParserErrorEOI`);が返ります。}
+
+      +p{基本的に
+      \d-code(``CSV.parser `1,2,3` ``);
+      のようにして使用します。}
+    >
+
+    +subsection {パース出来るデータ形式について} <
+      +p{基本的に、改行文字（CRLF若しくはLF）で行ごとに分かれ、カンマ文字でそれぞれの列に分かれてリストになります。
+      カンマの前後のスペース文字は無視されず、データに含まれます。また、カンマ直後に改行文字があった場合にも、空白文字の列が存在したと解釈します。}
+
+      +pn{例：
+      \d-code(lf^demo-csv-data);
+      というCSVデータをパースすると
+      \show-value (None) (demo-csv-data);
+      という\code(`(string list) list`);のデータ構造になります。}
+
+
+      +p{ダブルクオーテーションによる表現もパースすることができます。
+      このとき、カンマとダブルクオーテーションの間に他の文字が入った場合はエラーになります。}
+      +pn{例：
+      \d-code(lf^demo-csv-data-2);
+      というCSVデータをパースすると
+      \show-value (None) (demo-csv-data-2);
+      というデータを取り出すことができます。しかし、
+      \d-code(lf^demo-csv-data-2-err);
+      というCSVデータをパースすると
+      \show-value (None) (demo-csv-data-2-err);
+      というエラーが返ります。}
+
+
+      +p{ダブルクオーテーションによる表現では、改行文字や区切り文字も含めることができます。
+      \d-code(lf^demo-csv-data-3);
+      というCSVデータをパースすると
+      \show-value (None) (demo-csv-data-3);
+      というデータができ、改行文字と区切り文字がきちんと含まれていることがわかります。}
+
+
+      +p{ダブルクオーテーションを二つ重ねることで、CSVデータにダブルクオーテーションを含めることができます。
+      \d-code(lf^demo-csv-data-4);
+      というCSVデータをパースすると
+      \show-value (None) (demo-csv-data-4);
+      となります。}
+
+      +p{区切り文字はカンマ以外にも変更することができ、例えばコロン区切りのデータを解析する場合は
+      \d-code(lf^demo-csv-data-5);
+      というデータを、\code(`` CSV.parser ?:(`:`) data ``);のようにしてパースすると、
+      \show-value (Some(`:`)) (demo-csv-data-5);
+      のようにきちんとデータが得られます。}
+    >
+  >
+
+  +section{CSVデータのプリント} <
+    +p{CSVデータのプリントもできます。}
+    +p{\code(`CSV.printer : string ?-> (string list) list -> string`);という関数を使うことで、
+    \code(`(string list) list`);というデータをCSV形式の文字列に変換できます。}
+
+    +p{例えば
+    \d-code(lf^(show-csv-data csv-data-1));
+    という\code(`(string list) list`);のデータを\code(`CSV.printer data`);とすることで
+    \d-code(lf^(CSV.printer csv-data-1));
+    というCSVデータに変換することができます。}
+
+    +p{パーサーと同様に区切り文字を変更することができ、先ほどのデータを\code(``CSV.printer ?:(`:`) data``);とすることで
+    \d-code(lf^(CSV.printer ?:(`:`) csv-data-1));
+    のように、コロン区切りの文字列に変換することができます。}
+  >
+
+  +section {必要なバージョンや依存など} <
+    +p{必要な\SATySFi;のバージョンは0.0.5以上、0.0.7未満です（文字列操作用のプリミティブに変更がない場合は0.0.7以降のバージョンも使うことができるかもしれません）。}
+    +p{また、このライブラリは\SATySFi;の標準ライブラリと、\href(`https://github.com/nyuichi/satysfi-base`){satysfi-base}という外部ライブラリに依存しています。ドキュメントの作成には\href(`https://github.com/puripuri2100/SATySFi-debug-show-value`){debug-show-value}という外部ライブラリにも依存しています。それぞれのインストールはsatyrographosを使用することを想定しています。}
+  >
+
+  +section {バグ報告・修正や機能追加の提案}<
+    +p{このパッケージはバグが存在するかもしれません。バグを発見した場合は以下のURLに報告してください。}
+    +p{\href(`https://github.com/puripuri2100/satysfi-csv/issues`){\code(`https://github.com/puripuri2100/satysfi-csv/issues`);}}
+    +p{このパッケージに対してコードの修正や機能追加の提案をしたい場合は、GitHubの機能を用いて以下のURLにプルリクエストを送ってください。}
+    +p{\href(`https://github.com/puripuri2100/satysfi-csv/pulls`){\code(`https://github.com/puripuri2100/satysfi-csv/pulls`);}}
+    +p{バグ報告・修正提案・機能追加提案をお待ちしております。}
+  >
+
+  +section{ライセンスとコピーライト}<
+    +p{このパッケージとドキュメントはMITライセンスのもとで配布されます。}
+    +p{Copyright (c) 2021 Naoki Kaneko (a.k.a. "puripuri2100")}
+  >
+>
