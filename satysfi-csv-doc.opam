@@ -18,8 +18,8 @@ depends: [
   "satysfi-csv" {= "%{version}%"}
 
   "satysfi-dist"
-  "satysfi-base" { >= "1.4.0" && < "2.0.0" }
-  "satysfi-debug-show-value" { >= "0.1.2" && < "0.2.0" }
+  "satysfi-base" { >= "1.4.0" & < "2.0.0" }
+  "satysfi-debug-show-value" { >= "0.1.2" & < "0.2.0" }
 ]
 build: [
   ["satyrographos" "opam" "build"
