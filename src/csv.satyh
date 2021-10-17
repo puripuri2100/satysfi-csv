@@ -1,0 +1,167 @@
+@require: base/base
+@require: base/list-ext
+
+type csv-parser-error =
+  | CSVParserErrorUnExpectedChar of int * string
+  | CSVParserErrorEOI
+
+
+module CSV : sig
+
+  val parser : string ?-> string -> ((string list) list) csv-parser-error result
+
+end = struct
+
+  let empty-string = ` `
+  let lf = string-unexplode [0x000A]
+  let cr = string-unexplode [0x000D]
+  let double-quotation = `"`
+  let is-empty s = string-length s == 0
+
+  % bool -> string -> string -> int -> (int * string * string) err result
+  let-rec parse-string-sub is-escape str buf pos =
+    if is-empty str then
+      Err(CSVParserErrorEOI)
+    else
+      let head = string-sub str 0 1 in
+      let tail = string-sub str 1 ((string-length str) - 1) in
+      if string-same head double-quotation then
+        if is-escape then
+          if is-empty tail then
+            %% エスケープされているはずなので、最後はダブルクオーテーションが2つ続かないといけない
+            Err(CSVParserErrorEOI)
+          else
+            let head2 = string-sub tail 0 1 in
+            if string-same head2 double-quotation then
+              let tail = string-sub tail 1 ((string-length tail) - 1) in
+              Ok((pos + 2, buf, tail))
+            else
+              parse-string-sub is-escape tail (buf^head) (pos + 1)
+        else
+          Ok((pos + 1, buf, tail))
+      else
+        parse-string-sub is-escape tail (buf^head) (pos + 1)
+
+
+
+  % string -> int -> string -> int -> (int * string * string * bool) err result
+  % ダブルクオーテーションで囲われた部分とseparaterを取り除いた部分を返す
+  % searaterが無く、改行文字が来ていた場合、若しくはtailが空文字列のときにis-endがtrueになる
+  let parse-string separater separater-len str pos =
+    let is-escape = string-same (string-sub str 0 1) double-quotation in
+    let result =
+      if is-escape then
+        let tail = (string-sub str 1 ((string-length str) - 1)) in
+        parse-string-sub true tail empty-string (pos + 1)
+      else
+        parse-string-sub false str empty-string pos
+    in
+    match result with
+    | Err(e) -> Err(e)
+    | Ok((pos, s, tail)) -> (
+      if string-length tail < separater-len then
+        if is-empty tail then
+          Ok((pos, s, empty-string, true))
+        else
+          let head = string-sub tail 0 1 in
+          let tail = string-sub tail 1 ((string-length tail) - 1) in
+          if string-same head lf then
+            Ok((pos + 1, s, tail, true))
+          else if string-same head cr then
+            if is-empty tail then
+              Err(CSVParserErrorUnExpectedChar(pos, cr))
+            else if string-same (string-sub tail 0 1) lf then
+              let tail = string-sub tail 1 ((string-length tail) - 1) in
+              Ok((pos + 2, s, tail, true))
+            else
+              Err(CSVParserErrorUnExpectedChar(pos, cr))
+          else
+            Err(CSVParserErrorUnExpectedChar(pos, head))
+      else
+        if string-same (string-sub tail 0 separater-len) separater then
+          let tail = string-sub tail separater-len ((string-length tail) - separater-len) in
+          Ok((pos + separater-len, s, tail, false))
+        else if string-same (string-sub tail 0 1) lf then
+          let tail = string-sub tail 1 ((string-length tail) - 1) in
+          Ok((pos + 1, s, tail, true))
+        else if string-same (string-sub tail 0 1) cr then
+          let tail = string-sub tail 1 ((string-length tail) - 1) in
+          if is-empty tail then
+            Err(CSVParserErrorUnExpectedChar(pos, cr))
+          else
+            let head2 = string-sub tail 0 1 in
+            let tail = string-sub tail 1 ((string-length tail) - 1) in
+            if string-same head2 lf then
+              Ok((pos + 2, s, tail, true))
+            else
+              Err(CSVParserErrorUnExpectedChar(pos, cr))
+        else
+          Err(CSVParserErrorUnExpectedChar(pos, string-sub tail 0 1))
+    )
+
+
+
+  % string -> int -> string -> string -> string list -> int -> (int * string list * string) err result
+  let-rec read-line separater separater-len str buf lst pos =
+    if is-empty str then
+      Ok((pos, buf::lst, empty-string))
+    else
+      let head = string-sub str 0 1 in
+      let tail = string-sub str 1 ((string-length str) - 1) in
+      if string-same head lf then
+        Ok((pos + 1, buf::lst, tail))
+      else if string-same head cr then
+        if is-empty tail then
+          Ok((pos + 1, (buf^cr)::lst, tail))
+        else
+          if string-same (string-sub tail 0 1) lf then
+            Ok((pos + 2, buf::lst, tail))
+          else
+            read-line separater separater-len tail (buf^cr) lst (pos + 1)
+      else if string-same head double-quotation then
+        if not (is-empty buf) then
+          Err(CSVParserErrorUnExpectedChar(pos, `"`))
+        else
+          % ダブルクオーテーションで囲われた部分とseparaterを取り除いた部分を返す
+          % searaterが無く、改行文字が来ていた場合、若しくはtailが空文字列のときにis-endがtrueになる
+          match parse-string separater separater-len tail pos with
+          | Err(e) -> Err(e)
+          | Ok((pos, s, tail, is-end)) -> (
+            let s-len = string-length s in
+            if is-end then
+              Ok((pos, s::lst, tail))
+            else
+              read-line separater separater-len tail empty-string (s::lst) pos
+          )
+      else if string-same (string-sub str 0 separater-len) separater then
+        let tail = string-sub str separater-len ((string-length str) - separater-len) in
+        read-line separater separater-len tail empty-string (buf::lst) (pos + separater-len)
+      else
+        read-line separater separater-len tail (buf^head) lst (pos + 1)
+
+
+  % string -> int -> string -> string list -> int -> (string list) err result
+  let-rec parser-sub separater separater-len str lst pos =
+    match read-line separater separater-len str empty-string [] pos with
+    | Err(e) -> Err(e)
+    | Ok((pos, line, tail)) -> (
+      let line = List.reverse line in
+      if is-empty tail then
+        Ok(List.reverse (line::lst))
+      else
+        parser-sub separater separater-len tail (line::lst) pos
+    )
+
+
+  let parser ?:separater-opt str =
+    let separater =
+      match separater-opt with
+      | Some(s) -> s
+      | None -> `,`
+    in
+    let separater-len = string-length separater in
+    parser-sub separater separater-len str [] 0
+
+
+
+end
