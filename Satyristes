@@ -1,0 +1,44 @@
+;; For Satyrographos 0.0.2 series
+(version 0.0.2)
+
+;; Library declaration
+(library
+  ;; Library name
+  (name "csv")
+  ;; Library version
+  (version "1.0.0")
+  ;; Files
+  (sources
+    ((packageDir "src")))
+  ;; OPAM package file
+  (opam "satysfi-csv.opam")
+  ;; Dependency
+  (dependencies
+    ((dist ()) ; Standard library
+     (base ()) ; Base library
+    )))
+
+;; Library doc declaration
+(libraryDoc
+  ;; Library doc name
+  (name "csv-doc")
+  ;; Library version
+  (version "1.0.0")
+  ;; Working directory to build docs
+  (workingDirectory "doc")
+  ;; Build commands
+  (build
+    ;; Run SATySFi
+    ((satysfi "manual.saty" "-o" "manual.pdf")))
+  ;; Files
+  (sources
+    ((doc "manual.pdf" "doc/manual.pdf")))
+  ;; OPAM package file
+  (opam "satysfi-csv-doc.opam")
+  ;; Dependency
+  (dependencies
+    ((csv ()) ; the main library
+     (dist ()) ; Standard library
+     (base ()) ; Base library
+     (debug-show-value ())
+    )))
