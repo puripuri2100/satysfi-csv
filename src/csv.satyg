@@ -175,13 +175,27 @@ end = struct
     List.fold-lefti f empty-string lst
 
 
-  let escape s =
+
+  let-rec find-separater separater separater-len str =
+    if (string-length str) < separater-len then
+      false
+    else
+      if string-same (string-sub str 0 separater-len) separater then
+        true
+      else
+        let tail = string-sub str 1 ((string-length str) - 1) in
+        find-separater separater separater-len tail
+
+
+  let escape separater s =
     let lst = string-explode s in
     let exist-lf = List.any (fun i -> i == 0x00A) lst in
     let exist-double-quotation = List.any (fun i -> i == 0x0022) lst in
-    match (exist-double-quotation, exist-lf) with
-    | (true, _) -> `""` ^ s ^ `""`
-    | (false, true) -> `"` ^ s ^ `"`
+    let exist-separater = find-separater separater (string-length separater) s in
+    match (exist-double-quotation, exist-lf, exist-separater) with
+    | (true, _, _) -> `""` ^ s ^ `""`
+    | (false, true, _) -> `"` ^ s ^ `"`
+    | (false, _, true) -> `"` ^ s ^ `"`
     | _ -> s
 
 
@@ -194,7 +208,7 @@ end = struct
     data
     |> List.map (fun lst -> (
       lst
-      |> List.map escape
+      |> List.map (escape separater)
       |> join separater
     ))
     |> join (cr^lf)
