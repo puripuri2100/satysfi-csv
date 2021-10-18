@@ -8,7 +8,18 @@ A CSV reader and writer for SATySFi.
 
 You can install csv package with [Satyrographos](https://github.com/na4zagin3/satyrographos).
 
+
+```sh
+opam update
+
+opam install satysfi-csv
+
+satyrographos install
 ```
+
+OR
+
+```sh
 opam pin add "git+https://github.com/puripuri2100/satysfi-csv.git"
 
 opam install satysfi-csv
